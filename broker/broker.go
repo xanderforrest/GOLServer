@@ -103,10 +103,11 @@ func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (
 
 			fmt.Println("Processing " + strconv.Itoa(len(engineCells)) + " Alive Cells from Worker ID: " + strconv.Itoa(id))
 
-			for i, cell := range engineCells {
-				fmt.Println(i)
+			for _, cell := range engineCells {
 				nextWorld[cell.Y][cell.X] = 255
 			}
+
+			fmt.Println("Finished processing cells from Worker: " + strconv.Itoa(id))
 
 		}
 

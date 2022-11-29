@@ -126,8 +126,13 @@ func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (
 func (g *GolEngine) DoTick(_ bool, res *stubs.TickReport) (err error) {
 	fmt.Println("Got do tick request...")
 	m.Lock()
-	res.AliveCount = len(aliveCells)
-	res.Turns = turn
+	if working {
+		res.AliveCount = len(aliveCells)
+		res.Turns = turn
+	} else {
+		res.AliveCount = 0
+		res.Turns = 0
+	}
 	m.Unlock()
 	return
 }

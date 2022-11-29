@@ -5,11 +5,13 @@ import (
 	"GOLServer/util"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/rpc"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -176,12 +178,17 @@ func (g *GolEngine) KillEngine(_ bool, _ *bool) (err error) {
 }
 
 func connectEngines() {
-	var ips = []string{"127.0.0.1:8031", "127.0.0.1:8032"}
+	content, err := ioutil.ReadFile("engines.txt")
+	if err != nil {
+		log.Fatal("Failed to read engines.txt file, can't really do much without any engines")
+	}
+	ips := strings.Split(string(content), "\n")
+	//var ips = []string{"54.166.236.125:8031"}
 	for id, ip := range ips {
-		fmt.Println("Connecting to Engine with IP: " + ip)
+		fmt.Println("\nConnecting to Engine with IP: " + ip)
 		engine, e := rpc.Dial("tcp", ip)
 		if e != nil {
-			log.Fatal("connecting to engine error:", e)
+			fmt.Println("Engine Connection FAILED:", e)
 		} else {
 			engines[id] = engine
 			fmt.Println("Connected...")
@@ -195,7 +202,7 @@ func main() {
 	fmt.Println("Game Of Life Broker V1 listening on port: " + *pAddr)
 
 	connectEngines()
-	fmt.Println("Connected to " + strconv.Itoa(len(engines)) + " GOL Engines.")
+	fmt.Println("\nConnected to " + strconv.Itoa(len(engines)) + " GOL Engines.")
 
 	rpc.Register(&GolEngine{})
 

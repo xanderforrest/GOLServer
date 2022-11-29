@@ -74,7 +74,7 @@ func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (
 	width = args.Width
 	height = args.Height
 	working = true
-	aliveCells = calculateAliveCells(width, height, world) // initialise with current alive for 0 turn tests
+	//aliveCells = calculateAliveCells(width, height, world) // initialise with current alive for 0 turn tests
 
 	engineCount := len(engines)
 	engineHeight := height / engineCount

@@ -205,7 +205,7 @@ func connectEngines() {
 func main() {
 	pAddr := flag.String("port", "8030", "Port to listen on")
 	flag.Parse()
-	fmt.Println("Game Of Life Broker V1.1 listening on port: " + *pAddr)
+	fmt.Println("Game Of Life Broker V1.2 listening on port: " + *pAddr)
 
 	connectEngines()
 	fmt.Println("\nConnected to " + strconv.Itoa(len(engines)) + " GOL Engines.")

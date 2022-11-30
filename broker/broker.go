@@ -27,8 +27,8 @@ var engines = make(map[int]*rpc.Client)
 
 type GolEngine struct{}
 
-func startEngine(client *rpc.Client, world [][]byte, id, engineHeight int, out chan<- []util.Cell) {
-	args := stubs.EngineArgs{TotalWorld: world, TWidth: width, THeight: height, Height: engineHeight, Offset: engineHeight * id, Threads: 8}
+func startEngine(client *rpc.Client, world [][]byte, threads, id, engineHeight int, out chan<- []util.Cell) {
+	args := stubs.EngineArgs{TotalWorld: world, TWidth: width, THeight: height, Height: engineHeight, Offset: engineHeight * id, Threads: threads}
 	response := new(stubs.EngineResponse)
 
 	err := client.Call(stubs.ProcessTurn, args, response)
@@ -54,20 +54,8 @@ func emptyWorld() [][]byte {
 	return world
 }
 
-func calculateAliveCells(width, height int, world [][]byte) []util.Cell {
-	newCell := []util.Cell{}
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
-			if world[x][y] == 0xff {
-				newCell = append(newCell, util.Cell{y, x})
-			}
-		}
-	}
-	return newCell
-}
-
 func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (err error) {
-	fmt.Println("Got ProcessTurns request")
+	fmt.Println("Got Job to run with " + strconv.Itoa(args.Threads) + " on each worker")
 	turns = args.Turns
 	turn = 0
 	world = args.World
@@ -90,7 +78,7 @@ func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (
 		m.Lock()
 
 		for id := range engines {
-			go startEngine(engines[id], world, id, engineHeight, out[id])
+			go startEngine(engines[id], world, args.Threads, id, engineHeight, out[id])
 		}
 
 		nextWorld := emptyWorld()

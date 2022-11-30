@@ -201,7 +201,7 @@ func (g *GolEngine) KillEngine(_ bool, _ *bool) (err error) {
 func main() {
 	pAddr := flag.String("port", "8031", "Port to listen on")
 	flag.Parse()
-	fmt.Println("Super Cool Distributed Game of Life Engine V2 is running on port: " + *pAddr)
+	fmt.Println("Super Cool Distributed Game of Life Engine V3 (threaded) is running on port: " + *pAddr)
 
 	rpc.Register(&GolEngine{})
 	listener, _ := net.Listen("tcp", ":"+*pAddr)

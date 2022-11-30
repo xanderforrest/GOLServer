@@ -25,6 +25,7 @@ var offset int
 var eHeight int
 var singleWorker = false
 var listener net.Listener
+var aliveCells = []util.Cell{}
 
 func isAlive(cell byte) bool {
 	if cell == 255 {
@@ -92,122 +93,66 @@ func getLiveNeighbours(width, height int, world [][]byte, a, b int) int {
 	return alive
 }
 
-func calculateNextState(width, height int, world [][]byte) [][]byte {
-	newWorld := make([][]byte, width)
-	for i := range newWorld {
-		newWorld[i] = make([]byte, height)
-	}
-	for i := 0; i < height; i++ {
-		for j := 0; j < width; j++ {
-			neighbours := getLiveNeighbours(width, height, world, i, j)
+func worker(startY, endY, TWidth, THeight int, out chan<- []util.Cell) {
+	workersCells := []util.Cell{}
+	for i := 0; i < TWidth; i++ {
+		for j := startY; j < endY; j++ {
+			neighbours := getLiveNeighbours(TWidth, THeight, world, i, j)
 			if world[i][j] == 0xff && (neighbours < 2 || neighbours > 3) {
-				newWorld[i][j] = 0x0
+				// cell dies, don't add to alive cells (duh)
 			} else if world[i][j] == 0x0 && neighbours == 3 {
-				newWorld[i][j] = 0xff
+				workersCells = append(workersCells, util.Cell{X: j, Y: i})
 			} else {
-				newWorld[i][j] = world[i][j]
+				if isAlive(world[i][j]) {
+					workersCells = append(workersCells, util.Cell{X: j, Y: i})
+				}
 			}
 		}
 	}
-	return newWorld
-}
-
-func calculateAliveCells(width, height int, world [][]byte) []util.Cell {
-	newCell := []util.Cell{}
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
-			if world[x][y] == 0xff {
-				newCell = append(newCell, util.Cell{y, x})
-			}
-		}
-	}
-	return newCell
-}
-
-func calculateAliveCount(world [][]byte) int {
-	count := 0
-	for x := range world {
-		for y := range world[x] {
-			if isAlive(world[x][y]) {
-				count++
-			}
-		}
-	}
-	return count
+	out <- workersCells
 }
 
 func (g *GolEngine) ProcessTurn(args stubs.EngineArgs, res *stubs.EngineResponse) (err error) {
 	m.Lock()
 	world = args.TotalWorld
 
-	fmt.Println("Engine Processing Turn between Y: " + strconv.Itoa(args.Offset) + " and Y: " + strconv.Itoa(args.Offset+args.Height))
-	fmt.Println("Total world given has " + strconv.Itoa(calculateAliveCount(world)) + " alive cells...")
+	aliveCells = []util.Cell{}
 
-	aliveCells := []util.Cell{}
-	for i := 0; i < args.TWidth; i++ {
-		for j := args.Offset; j < args.Offset+args.Height; j++ {
-			neighbours := getLiveNeighbours(args.TWidth, args.THeight, world, i, j)
-			if world[i][j] == 0xff && (neighbours < 2 || neighbours > 3) {
-				// cell dies, don't add to alive cells (duh)
-			} else if world[i][j] == 0x0 && neighbours == 3 {
-				aliveCells = append(aliveCells, util.Cell{X: j, Y: i})
-			} else {
-				if isAlive(world[i][j]) {
-					aliveCells = append(aliveCells, util.Cell{X: j, Y: i})
-				}
-			}
-		}
+	workerHeight := args.Height / args.Threads
+
+	//fmt.Println("Starting image: " + filename + " with " + strconv.Itoa(p.Threads) + " threads and a worker height of: " + strconv.Itoa(workerHeight))
+
+	out := make([]chan []util.Cell, args.Threads)
+	for i := range out {
+		fmt.Println("Creating Channel for Thread with ID " + strconv.Itoa(i))
+		out[i] = make(chan []util.Cell)
 	}
 
+	for i := 0; i < args.Threads; i++ {
+		//fmt.Println("Starting worker between Y: " + strconv.Itoa(i*workerHeight) + ", " + strconv.Itoa((i+1)*workerHeight))
+		var startY = args.Offset + (i * workerHeight)
+		fmt.Println(strconv.Itoa(i) + " - Worker Processing Turn between Y: " + strconv.Itoa(startY) + " and Y: " + strconv.Itoa(startY+workerHeight))
+		go worker(startY, startY+workerHeight, args.TWidth, args.THeight, out[i])
+	}
+
+	for i := 0; i < args.Threads; i++ {
+
+		var workerCells = <-out[i]
+		aliveCells = append(aliveCells, workerCells...)
+
+		fmt.Println("Processing " + strconv.Itoa(len(aliveCells)) + " Alive Cells from Worker ID: " + strconv.Itoa(i))
+	}
+
+	fmt.Println("Retunring " + strconv.Itoa(len(aliveCells)) + " cells to the Controller...")
 	res.AliveCells = aliveCells
 	m.Unlock()
-	return
-}
-
-func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (err error) {
-	if !working { // If ProcessTurns is called again, it's a new client connection, continue working on current job
-		turns = args.Turns
-		turn = 0
-		world = args.World
-		width = args.Width
-		height = args.Height
-		working = true
-
-		n := 0
-		for n < 10 {
-			n++
-			fmt.Println("========== STARTING PROCESSING " + strconv.Itoa(turn) + "/" + strconv.Itoa(args.Turns) + "TURNS ==========")
-		}
-
-	} else {
-		fmt.Println("Client called ProcessTurns while still working, continuing work")
-	}
-
-	for turn < turns {
-		m.Lock()
-		if turn%50 == 0 {
-			fmt.Println("Engine Processing Turn: " + strconv.Itoa(turn))
-		}
-		world = calculateNextState(width, height, world)
-		turn++
-		m.Unlock()
-	}
-
-	res.TurnsComplete = turns
-	res.AliveCells = calculateAliveCells(width, height, world)
-	working = false
-	n := 0
-	for n < 10 {
-		n++
-		fmt.Println("========== FINISHED PROCESSING ALL " + strconv.Itoa(turn) + " TURNS ==========")
-	}
 	return
 }
 
 func (g *GolEngine) DoTick(_ bool, res *stubs.TickReport) (err error) {
 	fmt.Println("Got do tick request...")
 	m.Lock()
-	res.AliveCount = calculateAliveCount(world)
+	res.AliveCount = len(aliveCells)
 	res.Turns = turn
 	m.Unlock()
 	return
@@ -234,7 +179,7 @@ func (g *GolEngine) InterruptEngine(_ bool, res *stubs.GolAliveCells) (err error
 	fmt.Println("Interrupt triggered, returning current work to controller.")
 
 	res.TurnsComplete = turn
-	res.AliveCells = calculateAliveCells(width, height, world)
+	res.AliveCells = aliveCells
 	m.Unlock()
 	return
 }
@@ -256,7 +201,7 @@ func (g *GolEngine) KillEngine(_ bool, _ *bool) (err error) {
 func main() {
 	pAddr := flag.String("port", "8031", "Port to listen on")
 	flag.Parse()
-	fmt.Println("Super Cool Distributed Game of Life Engine is running on port: " + *pAddr)
+	fmt.Println("Super Cool Distributed Game of Life Engine V2 is running on port: " + *pAddr)
 
 	rpc.Register(&GolEngine{})
 	listener, _ := net.Listen("tcp", ":"+*pAddr)

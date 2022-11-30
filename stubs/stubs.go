@@ -21,6 +21,7 @@ type EngineArgs struct {
 	TWidth, THeight int
 	Height          int
 	Offset          int
+	Threads         int
 }
 
 type EngineResponse struct {

@@ -65,6 +65,13 @@ func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (
 	//aliveCells = calculateAliveCells(width, height, world) // initialise with current alive for 0 turn tests
 
 	engineCount := len(engines)
+	if args.Engines > engineCount {
+		log.Fatal("Controller requested more Engines than we have connected...")
+	} else {
+		engineCount = args.Engines
+	}
+
+	fmt.Println("Controller requested running " + strconv.Itoa(args.Engines) + " so we're running " + strconv.Itoa(engineCount) + " Engines.")
 	engineHeight := height / engineCount
 
 	out := make([]chan []util.Cell, engineCount)
@@ -77,25 +84,25 @@ func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (
 	for turn < turns {
 		m.Lock()
 
-		for id := range engines {
-			go startEngine(engines[id], world, args.Threads, id, engineHeight, out[id])
+		for i := 0; i < engineCount; i++ {
+			go startEngine(engines[i], world, args.Threads, i, engineHeight, out[i])
 		}
 
 		nextWorld := emptyWorld()
 		aliveCells = nil
 
-		for id := range engines {
+		for i := 0; i < engineCount; i++ {
 
-			var engineCells = <-out[id]
+			var engineCells = <-out[i]
 			aliveCells = append(aliveCells, engineCells...)
 
-			fmt.Println("Processing " + strconv.Itoa(len(engineCells)) + " Alive Cells from Worker ID: " + strconv.Itoa(id))
+			fmt.Println("Processing " + strconv.Itoa(len(engineCells)) + " Alive Cells from Worker ID: " + strconv.Itoa(i))
 
 			for _, cell := range engineCells {
 				nextWorld[cell.Y][cell.X] = 255
 			}
 
-			fmt.Println("Finished processing cells from Worker: " + strconv.Itoa(id))
+			fmt.Println("Finished processing cells from Worker: " + strconv.Itoa(i))
 
 		}
 
@@ -195,7 +202,7 @@ func connectEngines() {
 func main() {
 	pAddr := flag.String("port", "8030", "Port to listen on")
 	flag.Parse()
-	fmt.Println("Game Of Life Broker V1.2 listening on port: " + *pAddr)
+	fmt.Println("Game Of Life Broker V2 (takes threads and engines) listening on port: " + *pAddr)
 
 	connectEngines()
 	fmt.Println("\nConnected to " + strconv.Itoa(len(engines)) + " GOL Engines.")

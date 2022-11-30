@@ -28,7 +28,7 @@ var engines = make(map[int]*rpc.Client)
 type GolEngine struct{}
 
 func startEngine(client *rpc.Client, world [][]byte, id, engineHeight int, out chan<- []util.Cell) {
-	args := stubs.EngineArgs{TotalWorld: world, TWidth: width, THeight: height, Height: engineHeight, Offset: engineHeight * id}
+	args := stubs.EngineArgs{TotalWorld: world, TWidth: width, THeight: height, Height: engineHeight, Offset: engineHeight * id, Threads: 8}
 	response := new(stubs.EngineResponse)
 
 	err := client.Call(stubs.ProcessTurn, args, response)

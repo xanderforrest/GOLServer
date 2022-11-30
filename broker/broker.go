@@ -24,11 +24,12 @@ var height int
 var working = false
 var aliveCells []util.Cell
 var engines = make(map[int]*rpc.Client)
+var workerThreads int
 
 type GolEngine struct{}
 
 func startEngine(client *rpc.Client, world [][]byte, id, engineHeight int, out chan<- []util.Cell) {
-	args := stubs.EngineArgs{TotalWorld: world, TWidth: width, THeight: height, Height: engineHeight, Offset: engineHeight * id, Threads: 8}
+	args := stubs.EngineArgs{TotalWorld: world, TWidth: width, THeight: height, Height: engineHeight, Offset: engineHeight * id, Threads: workerThreads}
 	response := new(stubs.EngineResponse)
 
 	err := client.Call(stubs.ProcessTurn, args, response)
@@ -208,6 +209,10 @@ func main() {
 	pAddr := flag.String("port", "8030", "Port to listen on")
 	flag.Parse()
 	fmt.Println("Game Of Life Broker V1.2 listening on port: " + *pAddr)
+	wThreads := flag.Int("workerThreads", 1, "Amount of threads each engine should use")
+	flag.Parse()
+	workerThreads = *wThreads
+	fmt.Println(workerThreads)
 
 	connectEngines()
 	fmt.Println("\nConnected to " + strconv.Itoa(len(engines)) + " GOL Engines.")

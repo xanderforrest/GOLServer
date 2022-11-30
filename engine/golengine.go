@@ -95,6 +95,9 @@ func getLiveNeighbours(width, height int, world [][]byte, a, b int) int {
 
 func worker(startY, endY, TWidth, THeight int, out chan<- []util.Cell) {
 	workersCells := []util.Cell{}
+	if endY > THeight {
+		endY = THeight
+	}
 	for i := 0; i < TWidth; i++ {
 		for j := startY; j < endY; j++ {
 			neighbours := getLiveNeighbours(TWidth, THeight, world, i, j)
@@ -119,7 +122,9 @@ func (g *GolEngine) ProcessTurn(args stubs.EngineArgs, res *stubs.EngineResponse
 	aliveCells = []util.Cell{}
 
 	workerHeight := args.Height / args.Threads
-
+	if args.Height%args.Threads > 0 {
+		workerHeight++
+	}
 	//fmt.Println("Starting image: " + filename + " with " + strconv.Itoa(p.Threads) + " threads and a worker height of: " + strconv.Itoa(workerHeight))
 
 	out := make([]chan []util.Cell, args.Threads)
@@ -201,7 +206,7 @@ func (g *GolEngine) KillEngine(_ bool, _ *bool) (err error) {
 func main() {
 	pAddr := flag.String("port", "8031", "Port to listen on")
 	flag.Parse()
-	fmt.Println("Super Cool Distributed Game of Life Engine V3 (threaded) is running on port: " + *pAddr)
+	fmt.Println("Super Cool Distributed Game of Life Engine V4 (threaded + overflow check) is running on port: " + *pAddr)
 
 	rpc.Register(&GolEngine{})
 	listener, _ := net.Listen("tcp", ":"+*pAddr)

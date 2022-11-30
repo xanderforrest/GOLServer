@@ -142,10 +142,13 @@ func (g *GolEngine) ProcessTurn(args stubs.EngineArgs, res *stubs.EngineResponse
 
 	for i := 0; i < args.Threads; i++ {
 
-		var workerCells = <-out[i]
-		aliveCells = append(aliveCells, workerCells...)
+		var returnedCells = <-out[i]
+		fmt.Println("Processing " + strconv.Itoa(len(returnedCells)) + " Alive Cells from Worker ID: " + strconv.Itoa(i))
+		if len(returnedCells) > 0 {
+			fmt.Println("First Cell from Worker " + strconv.Itoa(i) + ": X" + strconv.Itoa(returnedCells[0].X) + " Y" + strconv.Itoa(returnedCells[0].Y))
+		}
+		aliveCells = append(aliveCells, returnedCells...)
 
-		fmt.Println("Processing " + strconv.Itoa(len(aliveCells)) + " Alive Cells from Worker ID: " + strconv.Itoa(i))
 	}
 
 	fmt.Println("Retunring " + strconv.Itoa(len(aliveCells)) + " cells to the Controller...")
@@ -206,7 +209,7 @@ func (g *GolEngine) KillEngine(_ bool, _ *bool) (err error) {
 func main() {
 	pAddr := flag.String("port", "8031", "Port to listen on")
 	flag.Parse()
-	fmt.Println("Super Cool Distributed Game of Life Engine V4 (threaded + overflow check) is running on port: " + *pAddr)
+	fmt.Println("Super Cool Distributed Game of Life Engine V4 (DEBUG threaded + overflow check) is running on port: " + *pAddr)
 
 	rpc.Register(&GolEngine{})
 	listener, _ := net.Listen("tcp", ":"+*pAddr)

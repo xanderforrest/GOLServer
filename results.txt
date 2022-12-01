@@ -1,0 +1,21 @@
+goos: linux
+goarch: amd64
+pkg: uk.ac.bris.cs/gameoflife
+BenchmarkGol/5120x5120x200-8-2-16         	       1	686945527779 ns/op
+BenchmarkGol/5120x5120x200-8-2-16         	       1	687831363728 ns/op
+BenchmarkGol/5120x5120x200-8-1-16         	       1	688539350835 ns/op
+BenchmarkGol/5120x5120x200-8-1-16         	       1	688493305856 ns/op
+BenchmarkGol/5120x5120x200-4-2-16         	       1	344270455255 ns/op
+BenchmarkGol/5120x5120x200-4-2-16         	       1	343890305722 ns/op
+BenchmarkGol/5120x5120x200-4-1-16         	       1	345114409102 ns/op
+BenchmarkGol/5120x5120x200-4-1-16         	       1	345111143321 ns/op
+BenchmarkGol/5120x5120x200-2-2-16         	       1	246198741985 ns/op
+BenchmarkGol/5120x5120x200-2-2-16         	       1	248018539706 ns/op
+BenchmarkGol/5120x5120x200-2-1-16         	       1	275837698996 ns/op
+BenchmarkGol/5120x5120x200-2-1-16         	       1	272712178448 ns/op
+BenchmarkGol/5120x5120x200-1-2-16         	       1	285967792929 ns/op
+BenchmarkGol/5120x5120x200-1-2-16         	       1	284497905096 ns/op
+BenchmarkGol/5120x5120x200-1-1-16         	       1	336569213016 ns/op
+BenchmarkGol/5120x5120x200-1-1-16         	       1	334512641886 ns/op
+ok  	uk.ac.bris.cs/gameoflife	12714.066s
+

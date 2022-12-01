@@ -15,7 +15,6 @@ import (
 	"sync"
 )
 
-var world [][]byte
 var turn = 0
 var turns int
 var m sync.Mutex
@@ -27,8 +26,48 @@ var engines = make(map[int]*rpc.Client)
 
 type GolEngine struct{}
 
-func startEngine(client *rpc.Client, world [][]byte, threads, id, engineHeight int, out chan<- []util.Cell) {
-	args := stubs.EngineArgs{TotalWorld: world, TWidth: width, THeight: height, Height: engineHeight, Offset: engineHeight * id, Threads: threads}
+func startEngine(client *rpc.Client, threads, id, engineHeight int, out chan<- []util.Cell, world [][]byte) {
+	/*
+		engineSlice := make([][]byte, engineHeight)
+		for y := 0; y < engineHeight; y++ {
+			engineSlice[y] = make([]byte, width)
+			for x := range engineSlice[y] {
+				engineSlice[y][x] = world[(id*engineHeight)+y][x]
+			}
+		}
+	*/
+	engineHalo := make([][]byte, 2)
+	if id == 0 {
+		engineHalo[0] = world[height-1]
+	} else {
+		engineHalo[0] = world[(engineHeight*id)-1]
+	}
+	if (id*engineHeight)+engineHeight == height {
+		engineHalo[1] = world[0]
+	} else {
+		engineHalo[1] = world[(id*engineHeight)+engineHeight+1]
+	}
+
+	/*
+		for y := 0; y < 2; y++ {
+			engineHalo[y] = make([]byte, width)
+			for j := range engineHalo[y] {
+				if (id * engineHeight) == 0 {
+					engineHalo[y][j] = world[height-1][j]
+				} else {
+					engineHalo[y][j] = world[(id*engineHeight)-1][j]
+				}
+
+				if (id*engineHeight)+engineHeight == height {
+					engineHalo[y][j] = world[0][j]
+				} else {
+					engineHalo[y][j] = world[(id*engineHeight)+engineHeight+1][j]
+				}
+			}
+		}
+	*/
+
+	args := stubs.EngineArgs{EngineSlice: world[id*engineHeight : (id*engineHeight)+engineHeight], EngineHalo: engineHalo, TWidth: width, THeight: height, EngineHeight: engineHeight, EngineID: id, Threads: threads}
 	response := new(stubs.EngineResponse)
 
 	err := client.Call(stubs.ProcessTurn, args, response)
@@ -38,57 +77,73 @@ func startEngine(client *rpc.Client, world [][]byte, threads, id, engineHeight i
 	out <- response.AliveCells
 }
 
-func emptyWorld() [][]byte {
-
-	world = make([][]byte, width)
-	for x := 0; x < width; x++ {
-		world[x] = make([]byte, height)
-	}
-
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
-			world[x][y] = 0
+func emptyWorld(w, h int) [][]byte {
+	world := make([][]uint8, height)
+	for i := 0; i < height; i++ {
+		world[i] = make([]uint8, width)
+		for j := range world[i] {
+			world[i][j] = 0
 		}
 	}
 
 	return world
 }
 
+func calculateAliveCells(width, height int, world [][]byte) []util.Cell {
+	var newCell []util.Cell
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			if world[x][y] == 0xff {
+				newCell = append(newCell, util.Cell{X: y, Y: x})
+			}
+		}
+	}
+	return newCell
+}
+
 func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (err error) {
-	fmt.Println("Got Job to run with " + strconv.Itoa(args.Threads) + " on each worker")
 	turns = args.Turns
 	turn = 0
-	world = args.World
+	world := args.World
 	width = args.Width
 	height = args.Height
 	working = true
+	if turns == 0 {
+		aliveCells = calculateAliveCells(width, height, world)
+	}
+
+	fmt.Printf("======= Job Recieved ========\nDimensions: %dx%d\nEngines: %d\nEngine Threads: %d\nTurns: %d\n", args.Width, args.Height, args.Engines, args.Threads, args.Turns)
 	//aliveCells = calculateAliveCells(width, height, world) // initialise with current alive for 0 turn tests
 
 	engineCount := len(engines)
+
 	if args.Engines > engineCount {
 		log.Fatal("Controller requested more Engines than we have connected...")
+	} else if args.Engines == 0 {
+		engineCount = len(engines)
 	} else {
 		engineCount = args.Engines
 	}
 
-	fmt.Println("Controller requested running " + strconv.Itoa(args.Engines) + " so we're running " + strconv.Itoa(engineCount) + " Engines.")
 	engineHeight := height / engineCount
+	fmt.Printf("\nUsing %d Engines, with an Engine Height of %d", engineCount, engineHeight)
 
 	out := make([]chan []util.Cell, engineCount)
 	for i := range out {
-		fmt.Println("Creating Channel for Engine with ID " + strconv.Itoa(i))
 		out[i] = make(chan []util.Cell)
 	}
 
-	fmt.Println("Channel slice has length: " + strconv.Itoa(len(out)))
 	for turn < turns {
 		m.Lock()
 
+		fmt.Printf("\n=== Began Turn %d ===\n", turn)
+
 		for i := 0; i < engineCount; i++ {
-			go startEngine(engines[i], world, args.Threads, i, engineHeight, out[i])
+			fmt.Printf("Starting Engine (%d) between Y: %d and Y: %d", i, engineHeight*i, engineHeight*i+engineHeight)
+			go startEngine(engines[i], args.Threads, i, engineHeight, out[i], world)
 		}
 
-		nextWorld := emptyWorld()
+		nextWorld := emptyWorld(width, height)
 		aliveCells = nil
 
 		for i := 0; i < engineCount; i++ {
@@ -96,24 +151,23 @@ func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (
 			var engineCells = <-out[i]
 			aliveCells = append(aliveCells, engineCells...)
 
-			fmt.Println("Processing " + strconv.Itoa(len(engineCells)) + " Alive Cells from Worker ID: " + strconv.Itoa(i))
+			fmt.Printf("\nEngine (%d) returned %d Alive Cells...", i, len(engineCells))
 
 			for _, cell := range engineCells {
 				nextWorld[cell.Y][cell.X] = 255
 			}
-
-			fmt.Println("Finished processing cells from Worker: " + strconv.Itoa(i))
-
 		}
 
-		fmt.Println("Finished processing turn: " + strconv.Itoa(turn) + "\nWith " + strconv.Itoa(engineCount) + "engines" + "\nWho returned " + strconv.Itoa(len(aliveCells)) + " Alive Cells this turn")
+		fmt.Printf("\n- Finished Turn %d ! -\nEngines: %d\nAlive Cells: %d", turn, engineCount, len(aliveCells))
 		world = nextWorld
 
 		turn++
 		m.Unlock()
 	}
 
+	fmt.Println("\n================== JOB FINISHED ===========================\n")
 	fmt.Println("Returning " + strconv.Itoa(len(aliveCells)) + " to local controller")
+	fmt.Println("\n================== JOB FINISHED ===========================\n\n\n")
 	res.TurnsComplete = turns
 	res.AliveCells = aliveCells
 	working = false
@@ -122,7 +176,6 @@ func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (
 }
 
 func (g *GolEngine) DoTick(_ bool, res *stubs.TickReport) (err error) {
-	fmt.Println("Got do tick request...")
 	m.Lock()
 	if working {
 		res.AliveCount = len(aliveCells)

@@ -19,10 +19,11 @@ type GolArgs struct {
 }
 
 type EngineArgs struct {
-	TotalWorld      [][]byte
+	EngineSlice     [][]byte
+	EngineHalo      [][]byte
 	TWidth, THeight int
-	Height          int
-	Offset          int
+	EngineHeight    int
+	EngineID        int
 	Threads         int
 }
 

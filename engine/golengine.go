@@ -21,10 +21,6 @@ var m sync.Mutex
 var width int
 var height int
 var working = false
-var offset int
-var eHeight int
-var singleWorker = false
-var listener net.Listener
 var aliveCells = []util.Cell{}
 
 func isAlive(cell byte) bool {
@@ -101,10 +97,10 @@ func worker(startY, endY, TWidth, THeight int, out chan<- []util.Cell) {
 			if world[i][j] == 0xff && (neighbours < 2 || neighbours > 3) {
 				// cell dies, don't add to alive cells (duh)
 			} else if world[i][j] == 0x0 && neighbours == 3 {
-				workersCells = append(workersCells, util.Cell{X: j, Y: i})
+				workersCells = append(workersCells, util.Cell{X: i, Y: j})
 			} else {
 				if isAlive(world[i][j]) {
-					workersCells = append(workersCells, util.Cell{X: j, Y: i})
+					workersCells = append(workersCells, util.Cell{X: i, Y: j})
 				}
 			}
 		}
@@ -112,10 +108,39 @@ func worker(startY, endY, TWidth, THeight int, out chan<- []util.Cell) {
 	out <- workersCells
 }
 
+func (g *GolEngine) UpdateWorld(args stubs.UpdateArgs, res *stubs.InitialiseResponse) (err error) {
+	fmt.Println("Updating world...")
+	m.Lock()
+	for _, c := range args.CellUpdates {
+		currentVal := world[c.X][c.Y]
+		if isAlive(currentVal) {
+			world[c.X][c.Y] = 0
+		} else {
+			world[c.X][c.Y] = 255
+		}
+		fmt.Printf("Flipped Cell in World [%d][%d]", c.Y, c.X)
+	}
+	res.Healthy = true
+	m.Unlock()
+	return
+}
+
+func (g *GolEngine) InitialiseEngine(args stubs.InitialiseArgs, res *stubs.InitialiseResponse) (err error) {
+	m.Lock()
+	fmt.Println("Initialising Engine...")
+	world = args.World
+	width = args.TWidth
+	height = args.THeight
+	fmt.Println("Engine initialised...")
+	res.Healthy = true
+	m.Unlock()
+	return
+}
+
 func (g *GolEngine) ProcessTurn(args stubs.EngineArgs, res *stubs.EngineResponse) (err error) {
 	m.Lock()
-	world = args.TotalWorld
 
+	fmt.Println("Process Turn requested")
 	aliveCells = []util.Cell{}
 
 	workerHeight := args.Height / args.Threads
@@ -132,7 +157,7 @@ func (g *GolEngine) ProcessTurn(args stubs.EngineArgs, res *stubs.EngineResponse
 		//fmt.Println("Starting worker between Y: " + strconv.Itoa(i*workerHeight) + ", " + strconv.Itoa((i+1)*workerHeight))
 		var startY = args.Offset + (i * workerHeight)
 		fmt.Println(strconv.Itoa(i) + " - Worker Processing Turn between Y: " + strconv.Itoa(startY) + " and Y: " + strconv.Itoa(startY+workerHeight))
-		go worker(startY, startY+workerHeight, args.TWidth, args.THeight, out[i])
+		go worker(startY, startY+workerHeight, width, height, out[i])
 	}
 
 	for i := 0; i < args.Threads; i++ {
@@ -201,7 +226,7 @@ func (g *GolEngine) KillEngine(_ bool, _ *bool) (err error) {
 func main() {
 	pAddr := flag.String("port", "8031", "Port to listen on")
 	flag.Parse()
-	fmt.Println("Super Cool Distributed Game of Life Engine V3 (threaded) is running on port: " + *pAddr)
+	fmt.Println("NIFTY Super Cool Distributed Game of Life Engine V3 (threaded) is running on port: " + *pAddr)
 
 	rpc.Register(&GolEngine{})
 	listener, _ := net.Listen("tcp", ":"+*pAddr)

@@ -10,18 +10,31 @@ var InterruptEngine = "GolEngine.InterruptEngine"
 var CheckStatus = "GolEngine.CheckStatus"
 var KillEngine = "GolEngine.KillEngine"
 var ProcessTurn = "GolEngine.ProcessTurn"
+var UpdateWorld = "GolEngine.UpdateWorld"
+var InitialiseEngine = "GolEngine.InitialiseEngine"
 
 type GolArgs struct {
 	World                [][]byte
 	Width, Height, Turns int
 }
 
-type EngineArgs struct {
-	TotalWorld      [][]byte
+type InitialiseArgs struct {
+	World           [][]byte
 	TWidth, THeight int
-	Height          int
-	Offset          int
-	Threads         int
+}
+
+type UpdateArgs struct {
+	CellUpdates []util.Cell
+}
+
+type EngineArgs struct {
+	Height  int
+	Offset  int
+	Threads int
+}
+
+type InitialiseResponse struct {
+	Healthy bool
 }
 
 type EngineResponse struct {

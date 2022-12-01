@@ -24,12 +24,13 @@ var height int
 var working = false
 var aliveCells []util.Cell
 var engines = make(map[int]*rpc.Client)
+var engineCount int
 var workerThreads int
 
 type GolEngine struct{}
 
-func startEngine(client *rpc.Client, world [][]byte, id, engineHeight int, out chan<- []util.Cell) {
-	args := stubs.EngineArgs{TotalWorld: world, TWidth: width, THeight: height, Height: engineHeight, Offset: engineHeight * id, Threads: workerThreads}
+func startEngine(client *rpc.Client, id, engineHeight int, out chan<- []util.Cell) {
+	args := stubs.EngineArgs{Height: engineHeight, Offset: engineHeight * id, Threads: workerThreads}
 	response := new(stubs.EngineResponse)
 
 	err := client.Call(stubs.ProcessTurn, args, response)
@@ -37,6 +38,60 @@ func startEngine(client *rpc.Client, world [][]byte, id, engineHeight int, out c
 		log.Fatal("Error when starting engine with ID: "+strconv.Itoa(id), err)
 	}
 	out <- response.AliveCells
+}
+
+func updateEngine(updates []util.Cell, id int, updated chan<- bool) {
+	args := stubs.UpdateArgs{CellUpdates: updates}
+	response := new(stubs.InitialiseResponse)
+	err := engines[id].Call(stubs.UpdateWorld, args, response)
+	if err != nil {
+		log.Fatal("Error when updating engine with ID: "+strconv.Itoa(id), err)
+	}
+	updated <- true
+}
+
+func updateEngines(updates []util.Cell) {
+	fmt.Println("Updating engines...")
+	updated := make([]chan bool, engineCount)
+	for i := range updated {
+		updated[i] = make(chan bool)
+	}
+
+	for id := range engines {
+		go updateEngine(updates, id, updated[id])
+	}
+
+	for id := range engines {
+		<-updated[id]
+	}
+	fmt.Println("Engines Updated...")
+}
+
+func initialiseEngine(world [][]byte, id int, updated chan<- bool) {
+	args := stubs.InitialiseArgs{World: world, TWidth: width, THeight: height}
+	response := new(stubs.InitialiseResponse)
+	err := engines[id].Call(stubs.InitialiseEngine, args, response)
+	if err != nil {
+		log.Fatal("Error when initialising engine with ID: "+strconv.Itoa(id), err)
+	}
+	updated <- true
+}
+
+func initialiseEngines(world [][]byte) {
+	fmt.Println("Initialising engines...")
+	updated := make([]chan bool, engineCount)
+	for i := range updated {
+		updated[i] = make(chan bool)
+	}
+
+	for id := range engines {
+		go initialiseEngine(world, id, updated[id])
+	}
+
+	for id := range engines {
+		<-updated[id]
+	}
+	fmt.Println("Initialising done...")
 }
 
 func emptyWorld() [][]byte {
@@ -67,6 +122,18 @@ func calculateAliveCells(width, height int, world [][]byte) []util.Cell {
 	return newCell
 }
 
+func getWorldDifferences(world [][]byte, oldworld [][]byte) []util.Cell {
+	newCell := []util.Cell{}
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			if world[x][y] != oldworld[x][y] {
+				newCell = append(newCell, util.Cell{y, x})
+			}
+		}
+	}
+	return newCell
+}
+
 func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (err error) {
 	fmt.Println("Got ProcessTurns request")
 	turns = args.Turns
@@ -75,10 +142,12 @@ func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (
 	width = args.Width
 	height = args.Height
 	working = true
-	//aliveCells = calculateAliveCells(width, height, world) // initialise with current alive for 0 turn tests
+	aliveCells = calculateAliveCells(width, height, world) // initialise with current alive for 0 turn tests
 
-	engineCount := len(engines)
+	engineCount = len(engines)
 	engineHeight := height / engineCount
+
+	initialiseEngines(world)
 
 	out := make([]chan []util.Cell, engineCount)
 	for i := range out {
@@ -91,7 +160,7 @@ func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (
 		m.Lock()
 
 		for id := range engines {
-			go startEngine(engines[id], world, id, engineHeight, out[id])
+			go startEngine(engines[id], id, engineHeight, out[id])
 		}
 
 		nextWorld := emptyWorld()
@@ -111,6 +180,9 @@ func (g *GolEngine) ProcessTurns(args stubs.GolArgs, res *stubs.GolAliveCells) (
 			fmt.Println("Finished processing cells from Worker: " + strconv.Itoa(id))
 
 		}
+
+		updates := getWorldDifferences(nextWorld, world)
+		updateEngines(updates)
 
 		fmt.Println("Finished processing turn: " + strconv.Itoa(turn) + "\nWith " + strconv.Itoa(engineCount) + "engines" + "\nWho returned " + strconv.Itoa(len(aliveCells)) + " Alive Cells this turn")
 		world = nextWorld
